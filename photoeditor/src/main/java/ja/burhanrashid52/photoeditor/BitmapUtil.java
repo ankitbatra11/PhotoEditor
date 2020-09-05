@@ -4,6 +4,7 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.opengl.GLException;
 import android.opengl.GLSurfaceView;
+import android.os.AsyncTask;
 
 import java.nio.IntBuffer;
 
@@ -79,11 +80,15 @@ class BitmapUtil {
      * @throws OutOfMemoryError error when system is out of memory to load and save bitmap
      */
     static Bitmap createBitmapFromGLSurface(GLSurfaceView glSurfaceView, GL10 gl) throws OutOfMemoryError {
+
         int x = 0, y = 0;
+
         int w = glSurfaceView.getWidth();
         int h = glSurfaceView.getHeight();
-        int bitmapBuffer[] = new int[w * h];
-        int bitmapSource[] = new int[w * h];
+
+        int[] bitmapBuffer = new int[w * h];
+        int[] bitmapSource = new int[w * h];
+
         IntBuffer intBuffer = IntBuffer.wrap(bitmapBuffer);
         intBuffer.position(0);
 
@@ -105,5 +110,48 @@ class BitmapUtil {
             return null;
         }
         return Bitmap.createBitmap(bitmapSource, w, h, Bitmap.Config.ARGB_8888);
+    }
+
+    public static void removeTransparencyAsync(Bitmap bitmap, OnSaveBitmap onSaveBitmap) {
+        new RemoveBitmapTransparency(onSaveBitmap).execute(bitmap);
+    }
+
+    private static class RemoveBitmapTransparency extends AsyncTask<Bitmap, Void, Bitmap> {
+
+        private final OnSaveBitmap onSaveBitmap;
+        private Exception error;
+
+        private RemoveBitmapTransparency(OnSaveBitmap onSaveBitmap) {
+            this.onSaveBitmap = onSaveBitmap;
+        }
+
+        @Override
+        protected Bitmap doInBackground(Bitmap... bitmaps) {
+            error = null;
+            Bitmap bitmap = null;
+            try {
+                bitmap = tryRemovingTransparency(bitmaps);
+            } catch (Exception e) {
+                error = e;
+            }
+            return bitmap;
+        }
+
+        @Override
+        protected void onPostExecute(Bitmap bitmap) {
+            super.onPostExecute(bitmap);
+            if (bitmap != null) {
+                onSaveBitmap.onBitmapReady(bitmap);
+            } else {
+                onSaveBitmap.onFailure(error);
+            }
+        }
+
+        private Bitmap tryRemovingTransparency(Bitmap[] bitmaps) {
+            if (bitmaps.length < 1) {
+                throw new IllegalArgumentException("Must provide a bitmap!");
+            }
+            return BitmapUtil.removeTransparency(bitmaps[0]);
+        }
     }
 }

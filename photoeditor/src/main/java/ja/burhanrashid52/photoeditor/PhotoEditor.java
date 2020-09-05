@@ -6,12 +6,14 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Typeface;
 import android.os.AsyncTask;
+
 import androidx.annotation.ColorInt;
 import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresPermission;
 import androidx.annotation.UiThread;
+
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
@@ -27,6 +29,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import static ja.burhanrashid52.photoeditor.BitmapUtil.*;
 
 /**
  * <p>
@@ -666,7 +670,7 @@ public class PhotoEditor implements BrushViewChangeListener {
                             if (parentView != null) {
                                 parentView.setDrawingCacheEnabled(true);
                                 Bitmap drawingCache = saveSettings.isTransparencyEnabled()
-                                        ? BitmapUtil.removeTransparency(parentView.getDrawingCache())
+                                        ? removeTransparency(parentView.getDrawingCache())
                                         : parentView.getDrawingCache();
                                 drawingCache.compress(saveSettings.getCompressFormat(), saveSettings.getCompressQuality(), out);
                             }
@@ -727,38 +731,11 @@ public class PhotoEditor implements BrushViewChangeListener {
         parentView.saveFilter(new OnSaveBitmap() {
             @Override
             public void onBitmapReady(Bitmap saveBitmap) {
-                new AsyncTask<String, String, Bitmap>() {
-                    @Override
-                    protected void onPreExecute() {
-                        super.onPreExecute();
-                        clearHelperBox();
-                        parentView.setDrawingCacheEnabled(false);
-                    }
-
-                    @Override
-                    protected Bitmap doInBackground(String... strings) {
-                        if (parentView != null) {
-                            parentView.setDrawingCacheEnabled(true);
-                            return saveSettings.isTransparencyEnabled() ?
-                                    BitmapUtil.removeTransparency(parentView.getDrawingCache())
-                                    : parentView.getDrawingCache();
-                        } else {
-                            return null;
-                        }
-                    }
-
-                    @Override
-                    protected void onPostExecute(Bitmap bitmap) {
-                        super.onPostExecute(bitmap);
-                        if (bitmap != null) {
-                            if (saveSettings.isClearViewsEnabled()) clearAllViews();
-                            onSaveBitmap.onBitmapReady(bitmap);
-                        } else {
-                            onSaveBitmap.onFailure(new Exception("Failed to load the bitmap"));
-                        }
-                    }
-
-                }.execute();
+                try {
+                    saveBitmap(saveSettings, onSaveBitmap);
+                } catch (Exception e) {
+                    onSaveBitmap.onFailure(e);
+                }
             }
 
             @Override
@@ -766,6 +743,37 @@ public class PhotoEditor implements BrushViewChangeListener {
                 onSaveBitmap.onFailure(e);
             }
         });
+    }
+
+    private void saveBitmap(final SaveSettings saveSettings, final OnSaveBitmap onSaveBitmap) {
+
+        clearHelperBox();
+
+        Bitmap bitmap = getDrawingCacheBitmap();
+
+        if (saveSettings.isTransparencyEnabled()) {
+            removeTransparencyAsync(bitmap, new OnSaveBitmap() {
+                @Override
+                public void onBitmapReady(Bitmap saveBitmap) {
+                    if (saveSettings.isClearViewsEnabled()) {
+                        clearAllViews();
+                    }
+                    onSaveBitmap.onBitmapReady(saveBitmap);
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    onSaveBitmap.onFailure(e);
+                }
+            });
+        } else {
+            onSaveBitmap.onBitmapReady(bitmap);
+        }
+    }
+
+    private Bitmap getDrawingCacheBitmap() {
+        parentView.setDrawingCacheEnabled(true);
+        return parentView.getDrawingCache();
     }
 
     private static String convertEmoji(String emoji) {
