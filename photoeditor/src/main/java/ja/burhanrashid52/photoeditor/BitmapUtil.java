@@ -151,7 +151,11 @@ class BitmapUtil {
             if (bitmaps.length < 1) {
                 throw new IllegalArgumentException("Must provide a bitmap!");
             }
-            return BitmapUtil.removeTransparency(bitmaps[0]);
+            try {
+                return BitmapUtil.removeTransparency(bitmaps[0]);
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
+            }
         }
     }
 }
